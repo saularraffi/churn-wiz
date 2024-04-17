@@ -34,4 +34,10 @@ response = requests.post(
     json={'query': query}
 )
 
-print(response.json())
+commits = response.json()['data']['repository']['object']['blame']['ranges']
+
+for commit in commits:
+    date = commit['commit']['committedDate']
+    startL = commit['startingLine']
+    endL = commit['endingLine']
+    print("({},{}) {}".format(startL, endL, date))
