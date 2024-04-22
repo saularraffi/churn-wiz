@@ -112,19 +112,24 @@ def getLinesChangedInPatch(patch):
         changeEncountered = False
         start = offset = hunkValues['-start']
         lastChangedLine = 0
+        linesToRollback = 0
 
         for n, line in enumerate(lines[1:]):
             lineNumber = offset + n
 
+            if line.startswith('+') and not changeEncountered:
+                linesToRollback += 1
+
             if line.startswith('-') and not changeEncountered:
-                start = lineNumber
+                start = lineNumber - linesToRollback
 
             if line.startswith('-'):
                 changeEncountered = True
             
             if not line.startswith('-') and changeEncountered:
-                linesChanged.append((start, lineNumber - 1))
+                linesChanged.append((start, lineNumber - 1 - linesToRollback))
                 changeEncountered = False
+                linesToRollback = 0
 
     return linesChanged
 
