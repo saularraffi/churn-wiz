@@ -1,7 +1,9 @@
+from datetime import datetime
 import requests
 import json
-import os
+import ast
 import re
+import os
 
 GH_TOKEN        = command_output = os.popen('gh auth token').read().strip()
 GH_GRAPHQL_URL  = 'https://api.github.com/graphql'
@@ -148,5 +150,45 @@ def getLinesChangedInPr(prData):
     
     return diffTable
 
-changeData = getLinesChangedInPr(41)
-print(changeData)
+def getDaysOld(dateStr):
+    now = datetime.now().date()
+    dateTimeObj = datetime.fromisoformat(dateStr.replace('Z', ''))
+    date = dateTimeObj.date()
+    return (now - date).days
+
+def buildDestinationBranchChangeTable(files, linesWithinNDays=90):
+    destinationBranchChangeTable = {}
+
+    for filename in files:
+        query = getFileCommitHistoryQuery(filename)
+        commitHistory = fetchFileCommitHistory(query)
+
+        destinationBranchChangeTable[filename] = []
+        
+        for commit in commitHistory:
+            changeStr, dateStr = commit.split(' ')
+            change = ast.literal_eval(changeStr)
+            daysOld = getDaysOld(dateStr)
+
+            if daysOld <= linesWithinNDays:
+                destinationBranchChangeTable[filename].append(change)
+        
+        if len(destinationBranchChangeTable[filename]) == 0:
+            del destinationBranchChangeTable[filename]
+    
+    return destinationBranchChangeTable
+
+def main():
+    prChangeData = getLinesChangedInPr(41)
+
+    filenames = []
+    for filename in prChangeData:
+        filenames.append(filename)
+
+    table = buildDestinationBranchChangeTable(filenames)
+
+    for filename, changes in table.items():
+        print(filename, '-', changes)
+
+if __name__ == "__main__":
+    main()
