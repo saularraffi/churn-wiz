@@ -1,17 +1,28 @@
 from datetime import datetime
 import requests
+import argparse
 import json
 import ast
 import re
 import os
 
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-gt', '--github-token', required=True, help='GitHub token used to call GitHub API')
+parser.add_argument('-pr', '--pr-number', required=True, help='PR number being evaluated for churn')
+parser.add_argument('-b', '--branch', default='main', help='Destination branch name (the branch being merged to)')
+parser.add_argument('-o', '--owner', required=True, help='Owner of the pull request')
+parser.add_argument('-r', '--repo', required=True, help='Name of the repository')
+
+args = parser.parse_args()
+
 GH_TOKEN        = command_output = os.popen('gh auth token').read().strip()
+REQUEST_HEADERS = { 'Authorization': f'Bearer { GH_TOKEN }' }
 GH_GRAPHQL_URL  = 'https://api.github.com/graphql'
-REQUEST_HEADERS = { "Authorization": f"Bearer { GH_TOKEN }" }
-OWNER           = "saularraffi"
-REPO            = "test"
-BRANCH          = "mybranch"
-PR_NUMBER       = 42
+PR_NUMBER       = args.pr_number
+BRANCH          = args.branch
+OWNER           = args.owner
+REPO            = args.repo
 
 def getFileCommitHistoryQuery(filename):
     global OWNER
@@ -247,5 +258,5 @@ def main():
 
     print(f'total churn - {totalLinesChanged} lines')
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
