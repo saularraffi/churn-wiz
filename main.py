@@ -11,6 +11,7 @@ REQUEST_HEADERS = { "Authorization": f"Bearer { GH_TOKEN }" }
 OWNER           = "saularraffi"
 REPO            = "test"
 BRANCH          = "mybranch"
+PR_NUMBER       = 42
 
 def getFileCommitHistoryQuery(filename):
     global OWNER
@@ -56,18 +57,11 @@ def fetchFileCommitHistory(query):
     
     return commitHistory
 
-def fetchFilesChanged(prNumber):
-    url = f'https://api.github.com/repos/{OWNER}/{REPO}/pulls/{13}/files'
-    response = requests.get(url, headers=REQUEST_HEADERS)
-    if response.status_code == 200:
-        files_changed = response.json()
-        return [file["filename"] for file in files_changed]
-
-def getPrDiffFiles(prNumber):
+def fetchPrDiffFiles(prNumber):
     url = f'https://api.github.com/repos/{OWNER}/{REPO}/pulls/{prNumber}/files'
     headers = {
-        "Authorization": f"Bearer {GH_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
+        'Authorization': REQUEST_HEADERS['Authorization'],
+        'Accept': 'application/vnd.github.v3+json'
     }
 
     response = requests.get(url, headers=headers)
@@ -135,8 +129,8 @@ def getLinesChangedInPatch(patch):
 
     return linesChanged
 
-def getLinesChangedInPr(prData):
-    prData = getPrDiffFiles(41)
+def getLinesChangedInPr(prNumber):
+    prData = fetchPrDiffFiles(prNumber)
 
     if 'error' in prData.keys():
         return {}
@@ -156,7 +150,7 @@ def getDaysOld(dateStr):
     date = dateTimeObj.date()
     return (now - date).days
 
-def buildDestinationBranchChangeTable(files, linesWithinNDays=90):
+def getLinesChangedInDestination(files, linesWithinNDays=90):
     destinationBranchChangeTable = {}
 
     for filename in files:
@@ -178,17 +172,80 @@ def buildDestinationBranchChangeTable(files, linesWithinNDays=90):
     
     return destinationBranchChangeTable
 
+def getOverlappingLinesChanged(changeSet1, changeSet2):
+    list1 = changeSet1
+    list2 = changeSet2
+
+    ptr1 = 0
+    ptr2 = 0
+
+    overlapping = []
+
+    while ptr1 < len(list1) and ptr2 < len(list2):
+        #     ---
+        # ---
+        if list1[ptr1][0] > list2[ptr2][1]:
+            ptr2 += 1
+        # ---
+        #     ---
+        elif list1[ptr1][1] < list2[ptr2][0]:
+            ptr1 += 1
+        
+        elif list1[ptr1][0] >= list2[ptr2][0]:
+            # ---
+            #     ---
+            if list1[ptr1][1] >= list2[ptr2][1]:
+                overlapping.append((list1[ptr1][0], list2[ptr2][1]))
+                ptr2 += 1
+            #  ---
+            # -----
+            else:
+                overlapping.append((list1[ptr1][0], list1[ptr1][1]))
+                ptr1 += 1
+        elif list1[ptr1][0] <= list2[ptr2][0]:
+            # ---
+            #  ---
+            if list1[ptr1][1] <= list2[ptr2][1]:
+                overlapping.append((list2[ptr2][0], list1[ptr1][1]))
+                ptr1 += 1
+            # -----
+            #  ---
+            else:
+                overlapping.append((list2[ptr2][0], list2[ptr2][1]))
+                ptr2 += 1
+    
+    return overlapping
+
+def getTotalLinesChanged(changedLines):
+    total = 0
+
+    for changeRange in changedLines:
+        _sum = changeRange[1] - changeRange[0] + 1
+        total += _sum
+    
+    return total
+
 def main():
-    prChangeData = getLinesChangedInPr(41)
+    prChangeData = getLinesChangedInPr(PR_NUMBER)
 
-    filenames = []
-    for filename in prChangeData:
-        filenames.append(filename)
+    filenames = [filename for filename in prChangeData]
+    destinationChangeData = getLinesChangedInDestination(filenames)
 
-    table = buildDestinationBranchChangeTable(filenames)
+    totalLinesChanged = 0
 
-    for filename, changes in table.items():
-        print(filename, '-', changes)
+    for filename, changes in destinationChangeData.items():
+        linesChangedInFile = 0
+
+        if filename in prChangeData.keys():
+            changeSet1 = prChangeData[filename]
+            changeSet2 = changes
+
+            overlap = getOverlappingLinesChanged(changeSet1, changeSet2)
+            
+            linesChangedInFile = getTotalLinesChanged(overlap)
+            totalLinesChanged += linesChangedInFile
+
+    print(f'total churn - {totalLinesChanged} lines')
 
 if __name__ == "__main__":
     main()
