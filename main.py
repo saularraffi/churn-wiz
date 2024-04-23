@@ -256,7 +256,7 @@ def main():
             linesChangedInFile = getTotalLinesChanged(overlap)
             totalLinesChanged += linesChangedInFile
 
-    print(f'total churn - {totalLinesChanged} lines')
+    print(totalLinesChanged)
 
 if __name__ == '__main__':
     main()
